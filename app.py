@@ -7,16 +7,16 @@ st.title("📋 Atualizador de Status dos Pedidos")
 
 
 # =========================
-# CACHE (ACELERA LEITURA)
+# CACHE + LEITURA SEGURA
 # =========================
 @st.cache_data
-def carregar_planilha(arquivo):
-    xls = pd.ExcelFile(arquivo)
+def carregar_planilha_bytes(file_bytes):
+    xls = pd.ExcelFile(file_bytes)
     frames = []
 
     for aba in xls.sheet_names:
         try:
-            df = pd.read_excel(arquivo, sheet_name=aba)
+            df = pd.read_excel(file_bytes, sheet_name=aba)
             df.columns = [str(c).strip() for c in df.columns]
             frames.append(df)
         except:
@@ -33,7 +33,7 @@ def normalizar_lote(valor):
 
 
 # =========================
-# FORM (CORRIGE ERRO FRONTEND)
+# FORM (EVITA BUG FRONTEND)
 # =========================
 with st.form("form_processamento"):
     col1, col2 = st.columns(2)
@@ -57,7 +57,7 @@ with st.form("form_processamento"):
 if submit:
 
     if not all([prog_f10, prog_f8, prontas_f10, prontas_f8, cliente]):
-        st.error("Envie todos os arquivos.")
+        st.error("Envie todos os arquivos antes de processar.")
         st.stop()
 
     arquivos = [
@@ -69,8 +69,19 @@ if submit:
 
     mapas = []
 
+    # =========================
+    # MONTA BASE DE STATUS
+    # =========================
     for arq, status in arquivos:
-        df = carregar_planilha(arq)
+        if arq is None or arq.size == 0:
+            continue
+
+        file_bytes = arq.getvalue()  # 🔥 CORREÇÃO PRINCIPAL
+
+        df = carregar_planilha_bytes(file_bytes)
+
+        if df.empty:
+            continue
 
         pedido_cols = [c for c in df.columns if "pedido" in c.lower()]
         lote_cols = [c for c in df.columns if "lote" in c.lower()]
@@ -88,7 +99,7 @@ if submit:
         mapas.append(aux)
 
     if not mapas:
-        st.error("Nenhum dado válido encontrado nos arquivos.")
+        st.error("Nenhum dado válido encontrado nos arquivos enviados.")
         st.stop()
 
     base = pd.concat(mapas, ignore_index=True)
@@ -107,7 +118,7 @@ if submit:
 
 
     # =========================
-    # 🔥 VETORIZADO (RÁPIDO)
+    # MERGE RÁPIDO (SEM LOOP)
     # =========================
     merged = cli.merge(
         base,
